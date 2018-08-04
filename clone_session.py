@@ -113,16 +113,27 @@ class ClonedSplittingMenu(plugin.MenuItem):
     return(container.split_axis(terminal, False, cwd, sibling))
 
   def get_terminal_cmd(self, terminal):
+    keychain_pkg = subprocess.Popen('dpkg -l|grep keychain',shell=True,stdout=subprocess.PIPE)
+    keychain_pkg.wait()
+    keychain_check = keychain_pkg.returncode
+    keychain_command = 'eval `keychain --eval id_rsa`;'
     raw = subprocess.Popen(['ps', '--no-headers', '-p', str(terminal.pid), '-o', 'command'], stdout=subprocess.PIPE)
     ps_line = subprocess.check_output(['head', '-1'], stdin=raw.stdout).strip()
     if ps_line and ps_line.strip().startswith('ssh'):
-      return ps_line.strip()
+      if keychain_check == 1:
+        return ps_line.strip()
+      elif keychain_check == 0:
+        return keychain_command + ps_line.strip()
 
     raw = subprocess.Popen(['ps', '--no-headers', '--ppid', str(terminal.pid), '-o', 'command'], stdout=subprocess.PIPE)
     ps_lines = subprocess.check_output(['head', '-100'], stdin=raw.stdout).strip().split('\n')
     for ps_line in ps_lines:
-      if ps_line.strip().startswith('ssh'):
-        return ps_line.strip()
+      if ps_line and ps_line.strip().startswith('ssh'):
+        if keychain_check == 1:
+          return ps_line.strip()
+        elif keychain_check == 0:
+          return keychain_command + ps_line.strip()
+
 
   def log(self, name, obj):
     with open('/tmp/log', 'a') as f:
@@ -215,4 +226,3 @@ class ClonableTerminal(Terminal):
         if self.pid == -1:
             self.vte.feed(_('Unable to start shell:') + shell)
             return(-1)
-
